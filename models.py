@@ -33,6 +33,7 @@ class BootstrapModel(torch.nn.Module):
         super(BootstrapModel, self).__init__()
         self.branches = branches
         self.branch_size = layer_config[-1]
+        self.inp_size = layer_config[0]
 
         lc = layer_config
         self.hidden_layers = torch.nn.ModuleList([
@@ -56,5 +57,18 @@ class BootstrapModel(torch.nn.Module):
         x = x.view(batch_size, -1)
         return x
 
-
-
+    def multiforward(self, x, mask=None):
+        xs = x.unfold(1, self.inp_size, self.inp_size)
+        ys = []
+        for i, module in enumerate(self.hidden_layers):
+            _x = xs[torch.arange(x.shape[0]), torch.tensor([i]).expand(x.shape[0]), ...]
+            _x = _x.view(x.shape[0], -1)
+            y = module(_x)
+            ys.append(y)
+        y = torch.cat(ys, dim=1)
+        if mask:
+            _x = y.unfold(1, self.branch_size, self.branch_size)
+            x = torch.zeros_like(_x)
+            x[i[0], i[1]] = _x[i[0], i[1]]
+            y = x.view(batch_size, -1)
+        return y
