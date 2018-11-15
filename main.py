@@ -6,6 +6,8 @@ import os
 
 import utils
 import TD3
+import BNNTD3
+import BootstrapTD3
 import OurDDPG
 import DDPG
 
@@ -38,7 +40,7 @@ def sample_branch(k=10):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy_name", default="TD3")  # Policy name
+    parser.add_argument("--policy_name", default="BNNTD3")  # Policy name
     parser.add_argument(
         "--env_name", default="HalfCheetah-v2")  # OpenAI gym environment name
     parser.add_argument(
@@ -101,7 +103,11 @@ if __name__ == "__main__":
 
     # Initialize policy
     if args.policy_name == "TD3":
-        policy = TD3.TD3(state_dim, action_dim, max_action, args.branches)
+        policy = TD3.TD3(state_dim, action_dim, max_action)
+    elif args.policy_name == "BNNTD3":
+        policy = BNNTD3.TD3(state_dim, action_dim, max_action)
+    elif args.policy_name == "BootstrapTD3":
+        policy = BootstrapTD3.TD3(state_dim, action_dim, max_action, args.branches)
     elif args.policy_name == "OurDDPG":
         policy = OurDDPG.DDPG(state_dim, action_dim, max_action)
     elif args.policy_name == "DDPG":
@@ -126,7 +132,7 @@ if __name__ == "__main__":
                 print("Total T: %d Episode Num: %d Episode T: %d Reward: %f"
                       % (total_timesteps, episode_num, episode_timesteps,
                            episode_reward))
-                if args.policy_name == "TD3":
+                if args.policy_name.endswith("TD3"):
                     policy.train(replay_buffer, episode_timesteps,
                                  args.batch_size, args.discount, args.tau,
                                  args.policy_noise, args.noise_clip,
@@ -157,7 +163,13 @@ if __name__ == "__main__":
         if total_timesteps < args.start_timesteps:
             action = env.action_space.sample()
         else:
-            action = policy.select_action(np.array(obs), branch)
+            if args.policy_name == "BootstrapTD3":
+                action = policy.select_action(np.array(obs), branch)
+            elif args.policy_name == "BNNTD3":
+                action = policy.select_action(np.array(obs), samples=1)
+            else:
+                action = policy.select_action(np.array(obs))
+
             if args.expl_noise != 0:
                 action = (action + np.random.normal(
                     0, args.expl_noise, size=env.action_space.shape[0])).clip(

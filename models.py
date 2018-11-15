@@ -5,6 +5,11 @@ def make_linear_layer(inp, outp, activation=torch.nn.ReLU):
     return torch.nn.Sequential(torch.nn.Linear(inp, outp),
                             activation())
 
+def make_linear_dropout_layer(inp, outp, activation=torch.nn.ReLU, p=0.5):
+    return torch.nn.Sequential(torch.nn.Linear(inp, outp),
+                            activation(),
+                            torch.nn.Dropout(p=p))
+
 def _init_weights(m):
     if type(m) == torch.nn.Linear:
         torch.nn.init.xavier_uniform_(m.weight)
@@ -72,3 +77,26 @@ class BootstrapModel(torch.nn.Module):
             x[i[0], i[1]] = _x[i[0], i[1]]
             y = x.view(batch_size, -1)
         return y
+
+class BNN(torch.nn.Module):
+    def __init__(self, layer_config, init_weights=_init_weights, activation=torch.nn.ReLU):
+        super(BNN, self).__init__()
+        model_config = [make_linear_dropout_layer(lc1, lc2) for lc1, lc2 in zip(layer_config[:-2], layer_config[1:])]
+        model_config.append(torch.nn.Linear(layer_config[-2], layer_config[-1]))
+        self.model = torch.nn.Sequential(*model_config)
+
+    def set_dropout(self, mode=True):
+        def f(layer):
+            if type(layer) == torch.nn.Dropout:
+                if mode:
+                    layer.train()
+                else:
+                    layer.eval()
+        self.model.apply(f)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+
+
