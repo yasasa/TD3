@@ -28,6 +28,12 @@ def evaluate_policy(policy, eval_episodes=10):
     print("---------------------------------------")
     return avg_reward
 
+def sample_branch(k=10):
+    num = np.random.randint(k)
+    b =np.zeros(k)
+    b[num] = 1
+    return b
+
 
 if __name__ == "__main__":
 
@@ -38,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", default=0, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument(
-        "--start_timesteps", default=1e4,
+        "--start_timesteps", default=1e2,
         type=int)  # How many time steps purely random policy is run for
     parser.add_argument(
         "--eval_freq", default=5e3,
@@ -107,6 +113,7 @@ if __name__ == "__main__":
     total_timesteps = 0
     timesteps_since_eval = 0
     episode_num = 0
+    branch = sample_branch()
     done = True
 
     while total_timesteps < args.max_timesteps:
@@ -141,12 +148,14 @@ if __name__ == "__main__":
             episode_reward = 0
             episode_timesteps = 0
             episode_num += 1
+            branch = sample_branch()
+
 
         # Select action randomly or according to policy
         if total_timesteps < args.start_timesteps:
             action = env.action_space.sample()
         else:
-            action = policy.select_action(np.array(obs))
+            action = policy.select_action(np.array(obs), branch)
             if args.expl_noise != 0:
                 action = (action + np.random.normal(
                     0, args.expl_noise, size=env.action_space.shape[0])).clip(

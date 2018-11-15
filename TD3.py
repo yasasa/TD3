@@ -70,7 +70,9 @@ class TD3(object):
 
     def select_action(self, state, mask=None):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
-        action = self.actor(state)
+        if mask is not None:
+            mask = torch.LongTensor(mask.reshape(1, -1)).to(device)
+        action = self.actor(state, mask)
         if mask is None:
             action = action.mean()
         else:
