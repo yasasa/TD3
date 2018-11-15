@@ -30,7 +30,7 @@ def evaluate_policy(policy, eval_episodes=10):
 
 def sample_branch(k=10):
     num = np.random.randint(k)
-    b =np.zeros(k)
+    b = np.zeros(k)
     b[num] = 1
     return b
 
@@ -74,6 +74,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--policy_freq", default=2,
         type=int)  # Frequency of delayed policy updates
+    parser.add_argument(
+        "--branches", default=3, type=int)
     args = parser.parse_args()
 
     file_name = "%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed))
@@ -99,7 +101,7 @@ if __name__ == "__main__":
 
     # Initialize policy
     if args.policy_name == "TD3":
-        policy = TD3.TD3(state_dim, action_dim, max_action)
+        policy = TD3.TD3(state_dim, action_dim, max_action, args.branches)
     elif args.policy_name == "OurDDPG":
         policy = OurDDPG.DDPG(state_dim, action_dim, max_action)
     elif args.policy_name == "DDPG":
@@ -113,7 +115,7 @@ if __name__ == "__main__":
     total_timesteps = 0
     timesteps_since_eval = 0
     episode_num = 0
-    branch = sample_branch()
+    branch = sample_branch(args.branches)
     done = True
 
     while total_timesteps < args.max_timesteps:
@@ -148,7 +150,7 @@ if __name__ == "__main__":
             episode_reward = 0
             episode_timesteps = 0
             episode_num += 1
-            branch = sample_branch()
+            branch = sample_branch(args.branches)
 
 
         # Select action randomly or according to policy
@@ -168,7 +170,7 @@ if __name__ == "__main__":
         episode_reward += reward
 
         # Store data in replay buffer
-        mt = np.random.uniform(size=10) > 0.5 # sample a vector for training
+        mt = np.random.uniform(size=args.branches) > 0.5 # sample a vector for training
         replay_buffer.add((obs, new_obs, action, reward, done_bool, mt))
 
         obs = new_obs

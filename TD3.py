@@ -14,30 +14,32 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, branches):
         super(Actor, self).__init__()
-        self.model = BootstrapModel(10, [state_dim, 400, 400, 300, action_dim])
+        self.branches = branches
+        self.model = BootstrapModel(branches, [state_dim, 400, 400, 300, action_dim])
         self.max_action = max_action
 
     def forward(self, x, mask=None):
         if mask is None:
-            mask = torch.ones_like(x)
+            mask = torch.ones(x.shape[0], self.branches)
         x = self.model(x, mask)
         x = self.max_action * torch.tanh(x)
         return x
 
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, branches):
         super(Critic, self).__init__()
+        self.branches = branches
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.model = BootstrapModel(10,
-                                    [state_dim + action_dim, 400, 400, 300, 1])
+        self.model = BootstrapModel(branches,
+                                    [state_dim + action_dim, 400, 300, 300, 1])
 
     def forward(self, x, u, mask=None):
         if mask is None:
-            mask = torch.ones_like(x)
+            mask = torch.ones(x.shape[0], self.branches)
         xu = torch.cat([x, u], 1)
         xs = self.model(xu, mask)
 
@@ -52,17 +54,18 @@ class Critic(nn.Module):
 
 
 class TD3(object):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, branches):
         self.state_dim = state_dim
         self.action_dim = action_dim
+        self.branches = branches
 
-        self.actor = Actor(state_dim, action_dim, max_action).to(device)
-        self.actor_target = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(state_dim, action_dim, max_action, branches).to(device)
+        self.actor_target = Actor(state_dim, action_dim, max_action, branches).to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters())
 
-        self.critic = Critic(state_dim, action_dim).to(device)
-        self.critic_target = Critic(state_dim, action_dim).to(device)
+        self.critic = Critic(state_dim, action_dim, branches).to(device)
+        self.critic_target = Critic(state_dim, action_dim, branches).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters())
 
@@ -112,7 +115,7 @@ class TD3(object):
             # Compute the target Q value
             target_qs = self.critic_target.bootstrap_actions(next_state, next_action)
             target_Q, _ = target_qs.min(dim=1)
-            target_Q = target_Q.view(-1, 1).expand(-1, 10)
+            target_Q = target_Q.view(-1, 1).expand(-1, self.branches)
             target_Q = reward + (done * discount * target_Q).detach()
             target_Q = target_Q.unfold(1, 1, 1)
             target_Q = target_Q * torch.tensor(
@@ -125,7 +128,7 @@ class TD3(object):
             current_qs = self.critic(state, action, mt)
 
             # Test to check if the unused Q functions are being 0'd out while the used ones are preserved!!
-            # print((torch.tensor((target_Q != current_qs), dtype=torch.int64) - mt).nonzero())
+            #print((torch.tensor((target_Q != current_qs), dtype=torch.int64) - mt).nonzero())
             # Compute critic loss
             critic_loss = F.mse_loss(current_qs, target_Q)
 
@@ -138,7 +141,8 @@ class TD3(object):
             if it % policy_freq == 0:
                 # Compute actor loss
                 actions = self.actor(state)
-                actor_loss = -self.critic.bootstrap_actions(state, actions).mean(dim=0).sum()
+                actor_loss = -self.critic.bootstrap_actions(state, actions).mean(dim=0)
+                actor_loss = actor_loss.sum()
 
                 # Optimize the actor
                 self.actor_optimizer.zero_grad()
