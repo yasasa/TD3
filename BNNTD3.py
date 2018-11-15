@@ -99,9 +99,11 @@ class TD3(object):
             next_action = next_action.clamp(-self.max_action, self.max_action)
 
             # Compute the target Q value
-            target_q1 = self.critic_target(next_state, next_action)
-            target_q2 = self.critic_target(next_state, next_action)
-            target_Q = torch.min(target_q1, target_q2)
+            target_qs = torch.stack([self.critic_target(next_state, next_action) for _ in range(100)])
+            mu = target_qs.mean(dim=0)
+            std = target_qs.std(dim=0)
+            target_Q = mu - 1.5*std
+
             target_Q = reward + (done * discount * target_Q).detach()
 
             # Get current Q estimates
