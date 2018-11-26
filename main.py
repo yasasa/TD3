@@ -40,13 +40,13 @@ def sample_branch(k=10):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy_name", default="BNNTD3")  # Policy name
+    parser.add_argument("--policy_name", default="BootstrapTD3")  # Policy name
     parser.add_argument(
-        "--env_name", default="HalfCheetah-v2")  # OpenAI gym environment name
+        "--env_name", default="HalfCheetah-v1")  # OpenAI gym environment name
     parser.add_argument(
         "--seed", default=0, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument(
-        "--start_timesteps", default=1e2,
+        "--start_timesteps", default=1e3,
         type=int)  # How many time steps purely random policy is run for
     parser.add_argument(
         "--eval_freq", default=5e3,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         "--branches", default=3, type=int)
     args = parser.parse_args()
 
-    file_name = "%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed))
+    file_name = "%s_%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed), args.branches)
     print("---------------------------------------")
     print("Settings: %s" % (file_name))
     print("---------------------------------------")
