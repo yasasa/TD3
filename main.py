@@ -78,6 +78,7 @@ if __name__ == "__main__":
         type=int)  # Frequency of delayed policy updates
     parser.add_argument(
         "--branches", default=3, type=int)
+    parser.add_argumen("--actor_branches", default=0, type=int)
     args = parser.parse_args()
 
     file_name = "%s_%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed), args.branches)
@@ -107,7 +108,11 @@ if __name__ == "__main__":
     elif args.policy_name == "BNNTD3":
         policy = BNNTD3.TD3(state_dim, action_dim, max_action)
     elif args.policy_name == "BootstrapTD3":
-        policy = BootstrapTD3.TD3(state_dim, action_dim, max_action, args.branches)
+        if args.actor_branches > 0:
+            actor_branches = args.actor_branches
+        else:
+            actor_branches = args.branches
+        policy = BootstrapTD3.TD3(state_dim, action_dim, max_action, args.branches, actor_branches)
     elif args.policy_name == "OurDDPG":
         policy = OurDDPG.DDPG(state_dim, action_dim, max_action)
     elif args.policy_name == "DDPG":
@@ -121,7 +126,11 @@ if __name__ == "__main__":
     total_timesteps = 0
     timesteps_since_eval = 0
     episode_num = 0
-    branch = sample_branch(args.branches)
+    if args.actor_branches > 0:
+        branches = args.actor_branches
+    else:
+        branches = args.branches
+    branch = sample_branch(branches)
     done = True
 
     while total_timesteps < args.max_timesteps:
@@ -156,7 +165,7 @@ if __name__ == "__main__":
             episode_reward = 0
             episode_timesteps = 0
             episode_num += 1
-            branch = sample_branch(args.branches)
+            branch = sample_branch(branches)
 
 
         # Select action randomly or according to policy

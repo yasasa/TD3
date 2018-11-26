@@ -152,7 +152,10 @@ class TD3(object):
                 # Compute actor loss
                 actions = self.actor(state)
                 actor_loss = -self.critic.bootstrap_actions(state, actions).mean(dim=0)
-                actor_loss = actor_loss.sum()
+                if self.actor_branches != self.critic_branches:
+                    actor_loss = actor_loss.mean()
+                else:
+                    actor_loss = actor_loss.sum()
 
                 # Optimize the actor
                 self.actor_optimizer.zero_grad()
