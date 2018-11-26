@@ -14,16 +14,23 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action, branches):
+    def __init__(self, state_dim, action_dim, max_action, branches=None):
         super(Actor, self).__init__()
+
         self.branches = branches
-        self.model = BootstrapModel(branches, [state_dim, 400, 400, 300, action_dim])
+        if branches:
+            self.model = BootstrapModel(branches, [state_dim, 400, 400, 300, action_dim])
+        else:
+            self.model = Model([state_dim, 400, 400, 300, action_dim])
         self.max_action = max_action
 
     def forward(self, x, mask=None):
-        if mask is None:
-            mask = torch.ones(x.shape[0], self.branches)
-        x = self.model(x, mask)
+        if self.branches:
+            if mask is None:
+                mask = torch.ones(x.shape[0], self.branches)
+            x = self.model(x, mask)
+        else:
+            x = self.model(x)
         x = self.max_action * torch.tanh(x)
         return x
 
@@ -54,13 +61,14 @@ class Critic(nn.Module):
 
 
 class TD3(object):
-    def __init__(self, state_dim, action_dim, max_action, branches):
+    def __init__(self, state_dim, action_dim, max_action, actor_branches, value_branches):
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.branches = branches
+        self.actor_branches = actor_branches
+        self.value_branches = value_branches
 
-        self.actor = Actor(state_dim, action_dim, max_action, branches).to(device)
-        self.actor_target = Actor(state_dim, action_dim, max_action, branches).to(device)
+        self.actor = Actor(state_dim, action_dim, max_action, actor_branches).to(device)
+        self.actor_target = Actor(state_dim, action_dim, max_action, value_branches).to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters())
 
@@ -77,7 +85,8 @@ class TD3(object):
             mask = torch.LongTensor(mask.reshape(1, -1)).to(device)
         action = self.actor(state, mask)
         if mask is None:
-            action = action.mean()
+            action = action.unfold(1, self.action_dim, self.action_dim)
+            action = action.mean(1)
         else:
             action = action.sum(1)
         return action.cpu().data.numpy().flatten()
@@ -104,7 +113,11 @@ class TD3(object):
             mt = torch.LongTensor(mt).to(device)
 
             # Select action according to policy and add clipped noise
-            tu = self.actor_target(next_state, mt)
+            tu = self.actor_target(next_state)
+            if self.actor_branches != self.critic_branches:
+                tu = tu.unfold(1, self.action_dim, self.action_dim)
+                tu = tu.mean(1)
+
             noise = torch.empty_like(tu).normal_(0, policy_noise).to(device)
             noise = noise.clamp(-noise_clip, noise_clip)
             next_action = (tu + noise).clamp(-self.max_action, self.max_action)
