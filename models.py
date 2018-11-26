@@ -64,7 +64,6 @@ class BootstrapModel(torch.nn.Module):
 
     def multiforward(self, x, mask=None):
         xs = x.unfold(1, self.inp_size, self.inp_size)
-        print(xs.shape, len(self.hidden_layers))
         assert(xs.shape[1] == len(self.hidden_layers))
         ys = []
         for i, module in enumerate(self.hidden_layers):

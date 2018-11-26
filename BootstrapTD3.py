@@ -84,8 +84,9 @@ class TD3(object):
         if mask is not None:
             mask = torch.LongTensor(mask.reshape(1, -1)).to(device)
         action = self.actor(state, mask)
+
+        action = action.unfold(1, self.action_dim, self.action_dim)
         if mask is None:
-            action = action.unfold(1, self.action_dim, self.action_dim)
             action = action.mean(1)
         else:
             action = action.sum(1)
