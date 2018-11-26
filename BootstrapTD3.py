@@ -61,19 +61,19 @@ class Critic(nn.Module):
 
 
 class TD3(object):
-    def __init__(self, state_dim, action_dim, max_action, actor_branches, value_branches):
+    def __init__(self, state_dim, action_dim, max_action, critic_branches, actor_branches):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.actor_branches = actor_branches
-        self.value_branches = value_branches
+        self.critic_branches = critic_branches
 
         self.actor = Actor(state_dim, action_dim, max_action, actor_branches).to(device)
-        self.actor_target = Actor(state_dim, action_dim, max_action, value_branches).to(device)
+        self.actor_target = Actor(state_dim, action_dim, max_action, actor_branches).to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters())
 
-        self.critic = Critic(state_dim, action_dim, branches).to(device)
-        self.critic_target = Critic(state_dim, action_dim, branches).to(device)
+        self.critic = Critic(state_dim, action_dim, critic_branches).to(device)
+        self.critic_target = Critic(state_dim, action_dim, critic_branches).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters())
 
@@ -110,7 +110,11 @@ class TD3(object):
             next_state = torch.FloatTensor(y).to(device)
             done = torch.FloatTensor(1 - d).to(device)
             reward = torch.FloatTensor(r).to(device)
-            mt = torch.LongTensor(mt).to(device)
+
+            if self.actor_branches != self.critic_branches:
+                mt = torch.ones((batch_size, self.critic_branches)).to(device)
+            else:
+                mt = torch.LongTensor(mt).to(device)
 
             # Select action according to policy and add clipped noise
             tu = self.actor_target(next_state)
@@ -123,9 +127,12 @@ class TD3(object):
             next_action = (tu + noise).clamp(-self.max_action, self.max_action)
 
             # Compute the target Q value
-            target_qs = self.critic_target.bootstrap_actions(next_state, next_action)
+            if self.actor_branches != self.critic_branches:
+                target_qs = self.critic_target(next_state, next_action)
+            else:
+                target_qs = self.critic_target.bootstrap_actions(next_state, next_action)
             target_Q, _ = target_qs.min(dim=1)
-            target_Q = target_Q.view(-1, 1).expand(-1, self.branches)
+            target_Q = target_Q.view(-1, 1).expand(-1, self.critic_branches)
             target_Q = reward + (done * discount * target_Q).detach()
             target_Q = target_Q.unfold(1, 1, 1)
             target_Q = target_Q * torch.tensor(
@@ -151,10 +158,11 @@ class TD3(object):
             if it % policy_freq == 0:
                 # Compute actor loss
                 actions = self.actor(state)
-                actor_loss = -self.critic.bootstrap_actions(state, actions).mean(dim=0)
                 if self.actor_branches != self.critic_branches:
-                    actor_loss = actor_loss.mean()
+                    actions = actions.unfold(1, self.action_dim, self.action_dim).mean(1)
+                    actor_loss = -self.critic(state, actions).mean()
                 else:
+                    actor_loss = -self.critic.bootstrap_actions(state, actions).mean(dim=0)
                     actor_loss = actor_loss.sum()
 
                 # Optimize the actor

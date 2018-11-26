@@ -78,7 +78,7 @@ if __name__ == "__main__":
         type=int)  # Frequency of delayed policy updates
     parser.add_argument(
         "--branches", default=3, type=int)
-    parser.add_argumen("--actor_branches", default=0, type=int)
+    parser.add_argument("--actor_branches", default=0, type=int)
     args = parser.parse_args()
 
     file_name = "%s_%s_%s_%s" % (args.policy_name, args.env_name, str(args.seed), args.branches)
